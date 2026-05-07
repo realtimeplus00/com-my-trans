@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실시간 음성 번역기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Pretendard:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --bg2: #13161e;
+    --bg3: #1a1e28;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(255,255,255,0.14);
+    --text: #e8eaf0;
+    --text2: #8a8fa8;
+    --text3: #565b70;
+    --accent: #4f8ef7;
+    --green: #3ecf8e;
+    --green-bg: rgba(62,207,142,0.1);
+    --green-border: rgba(62,207,142,0.25);
+    --amber: #f0a429;
+    --amber-bg: rgba(240,164,41,0.1);
+    --red: #f05252;
+    --red-bg: rgba(240,82,82,0.1);
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  body {
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem 3rem;
+    line-height: 1.6;
+  }
+
+  .container { max-width: 720px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header { margin-bottom: 2rem; }
+  .header-top { display: flex; align-items: center; gap: 12px; margin-bottom: 5px; }
+  .logo {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--accent); display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0;
+  }
+  .logo svg { width: 22px; height: 22px; fill: white; }
+  .header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .header p { font-size: 13px; color: var(--text2); margin-left: 50px; }
+
+  /* ── Section card ── */
+  .section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 500; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after { content:''; flex:1; height:1px; background: var(--border); }
+
+  /* ── Key row ── */
+  .key-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 12px;
+  }
+  .key-row:last-of-type { margin-bottom: 0; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label {
+    font-size: 12px; color: var(--text2); font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* saved indicator dot next to label */
+  .key-saved-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text3);
+    display: inline-block;
+    transition: background 0.3s, box-shadow 0.3s;
+    flex-shrink: 0;
+  }
+  .key-saved-dot.saved {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  .field input, .field select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  .field input[type="password"] { font-family: 'DM Mono', monospace; letter-spacing: 0.06em; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--text3); }
+  .field select option { background: var(--bg3); }
+
+  /* ── Save button (per key) ── */
+  .save-key-btn {
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius);
+    background: var(--bg3);
+    color: var(--text2);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 6px;
+    flex-shrink: 0;
+  }
+  .save-key-btn:hover { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+  .save-key-btn.saved-state {
+    border-color: var(--green-border);
+    color: var(--green);
+    background: var(--green-bg);
+  }
+
+  /* Azure two-input sub-row */
+  .azure-inputs { display: grid; grid-template-columns: 1fr 150px; gap: 8px; }
+
+  /* ── STT tabs ── */
+  .stt-tabs {
+    display: flex; background: var(--bg3);
+    border-radius: var(--radius); padding: 3px; gap: 3px; margin-top: 6px;
+  }
+  .stt-tab {
+    flex:1; padding: 8px 0; border:none; background: transparent;
+    color: var(--text2); font-size: 13px; font-family: inherit;
+    cursor: pointer; border-radius: 8px; transition: all 0.15s; font-weight: 500;
+  }
+  .stt-tab.active { background: var(--accent); color: white; }
+
+  /* ── Language controls ── */
+  .controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+
+  /* ── Main action button ── */
+  .main-btn {
+    width: 100%; padding: 15px;
+    border: none; border-radius: var(--radius-lg);
+    font-size: 15px; font-weight: 600; font-family: inherit;
+    cursor: pointer; transition: all 0.18s;
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; letter-spacing: -0.01em; margin-bottom: 1rem;
+  }
+  .main-btn.start { background: var(--accent); color: white; }
+  .main-btn.start:hover { background: #3a7eef; transform: translateY(-1px); }
+  .main-btn.stop { background: var(--red-bg); color: var(--red); border: 1px solid rgba(240,82,82,0.3); }
+  .main-btn.stop:hover { background: rgba(240,82,82,0.2); }
+  .main-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* ── Status bar ── */
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: var(--radius);
+    background: var(--bg2); border: 1px solid var(--border);
+    margin-bottom: 1rem; font-size: 13px; color: var(--text2);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); flex-shrink:0; transition: background 0.3s; }
+  .dot.listening { background: var(--green); box-shadow: 0 0 8px var(--green); animation: blink 1.4s ease-in-out infinite; }
+  .dot.processing { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: blink 0.6s ease-in-out infinite; }
+  .dot.speaking { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Timer ── */
+  .timer-wrap { margin-bottom: 1rem; display:none; }
+  .timer-label { display:flex; justify-content:space-between; font-size:12px; color:var(--text3); margin-bottom:6px; }
+  .timer-bar { height:4px; background:var(--bg3); border-radius:4px; overflow:hidden; }
+  .timer-fill { height:100%; background: linear-gradient(90deg, var(--accent), var(--green)); width:0%; transition: width 0.12s linear; border-radius:4px; }
+
+  /* ── Output panels ── */
+  .output-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:1rem; }
+  .output-panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1rem;
+    min-height: 130px; display:flex; flex-direction:column;
+  }
+  .panel-label {
+    font-size: 11px; font-weight:500; color:var(--text3);
+    text-transform:uppercase; letter-spacing:0.08em;
+    margin-bottom:10px; display:flex; align-items:center; gap:6px;
+  }
+  .dot-sm { width:6px; height:6px; border-radius:50%; background:var(--text3); flex-shrink:0; }
+  .dot-sm.src { background: var(--green); }
+  .dot-sm.tgt { background: var(--accent); }
+  .panel-text { font-size:14px; color:var(--text); line-height:1.65; flex:1; }
+  .panel-text.empty { color:var(--text3); font-style:italic; font-size:13px; }
+
+  /* ── History ── */
+  .history-panel { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:1.25rem; }
+  .history-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+  .history-title { font-size:11px; font-weight:500; color:var(--text3); text-transform:uppercase; letter-spacing:0.1em; }
+  .clear-btn { font-size:12px; background:none; border:none; color:var(--text3); cursor:pointer; font-family:inherit; padding:3px 8px; border-radius:6px; transition:all 0.15s; }
+  .clear-btn:hover { background:var(--bg3); color:var(--text2); }
+  .history-list { max-height:220px; overflow-y:auto; }
+  .history-list::-webkit-scrollbar { width:4px; }
+  .history-list::-webkit-scrollbar-thumb { background:var(--border-hover); border-radius:4px; }
+  .history-item { padding:10px 0; border-bottom:1px solid var(--border); }
+  .history-item:last-child { border-bottom:none; }
+  .history-ts { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; margin-bottom:4px; }
+  .history-src { font-size:13px; color:var(--text2); margin-bottom:3px; }
+  .history-tgt { font-size:13px; color:var(--text); font-weight:500; }
+  .history-empty { font-size:13px; color:var(--text3); font-style:italic; text-align:center; padding:1.5rem 0; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem;
+    background: var(--bg2); border: 1px solid var(--green-border);
+    color: var(--green); font-size: 13px; font-family: inherit;
+    padding: 11px 18px; border-radius: var(--radius);
+    opacity: 0; transform: translateY(10px);
+    transition: all 0.22s; pointer-events:none;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    z-index: 9999;
+  }
+  .toast.show { opacity:1; transform:translateY(0); }
+
+  @media (max-width: 540px) {
+    .controls-row, .output-grid { grid-template-columns: 1fr; }
+    .azure-inputs { grid-template-columns: 1fr; }
+    .key-row { grid-template-columns: 1fr; }
+    .save-key-btn { width: 100%; justify-content: center; }
+  }
+</style>
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="실시간 음성 번역기">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#7c3aed">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <script>
+    if('serviceWorker' in navigator){
+      window.addEventListener('load',()=>{
+        navigator.serviceWorker.register('./service-worker.js');
+      });
+    }
+    window.addEventListener('beforeinstallprompt',e=>{
+      e.preventDefault();
+      window._pwaE=e;
+      var b=document.createElement('div');
+      b.style='position:fixed;bottom:0;left:0;right:0;background:#7c3aed;color:#fff;padding:18px;text-align:center;z-index:9999;font-size:15px;font-weight:bold;cursor:pointer;font-family:sans-serif;';
+      b.innerHTML='📲 홈화면에 앱 추가하기 · Add to Home Screen';
+      b.onclick=async function(){window._pwaE.prompt();var r=await window._pwaE.userChoice;if(r.outcome==='accepted')b.remove();};
+      document.body.appendChild(b);
+    });
+  </script>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="logo">
+        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zm-1 13H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+      </div>
+      <h1>실시간 음성 번역기</h1>
+    </div>
+    <p>말하면 4초 후 외국어로 자동 변환 · Groq / Gemini STT · Azure TTS</p>
+  </div>
+
+  <!-- API Keys -->
+  <div class="section">
+    <div class="section-title">API 키 설정</div>
+
+    <!-- Groq -->
+    <div class="key-row">
+      <div class="field">
+        <label>
+          <span class="key-saved-dot" id="dot-groq"></span>
+          Groq API Key
+        </label>
+        <input type="password" id="groqKey" placeholder="gsk_..." autocomplete="off"
+          oninput="markUnsaved('groq')" />
+      </div>
+      <button class="save-key-btn" id="saveBtn-groq" onclick="saveKey('groq')">
+        💾 저장
+      </button>
+    </div>
+
+    <!-- Gemini -->
+    <div class="key-row">
+      <div class="field">
+        <label>
+          <span class="key-saved-dot" id="dot-gemini"></span>
+          Gemini API Key
+        </label>
+        <input type="password" id="geminiKey" placeholder="AIza..." autocomplete="off"
+          oninput="markUnsaved('gemini')" />
+      </div>
+      <button class="save-key-btn" id="saveBtn-gemini" onclick="saveKey('gemini')">
+        💾 저장
+      </button>
+    </div>
+
+    <!-- Azure -->
+    <div class="key-row">
+      <div class="field">
+        <label>
+          <span class="key-saved-dot" id="dot-azure"></span>
+          Azure Speech Key + Region
+        </label>
+        <div class="azure-inputs">
+          <input type="password" id="azureKey" placeholder="Azure Speech Key" autocomplete="off"
+            oninput="markUnsaved('azure')" />
+          <input type="text" id="azureRegion" placeholder="koreacentral"
+            oninput="markUnsaved('azure')" />
+        </div>
+      </div>
+      <button class="save-key-btn" id="saveBtn-azure" onclick="saveKey('azure')">
+        💾 저장
+      </button>
+    </div>
+
+    <!-- STT engine -->
+    <div class="field" style="margin-top:16px;">
+      <label>STT 엔진 선택</label>
+      <div class="stt-tabs">
+        <button class="stt-tab active" id="tabGroq" onclick="selectSTT('groq')">⚡ Groq Whisper</button>
+        <button class="stt-tab" id="tabGemini" onclick="selectSTT('gemini')">✦ Gemini Flash</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Language -->
+  <div class="controls-row">
+    <div class="section" style="margin-bottom:0;">
+      <div class="section-title">입력 언어</div>
+      <div class="field">
+        <select id="srcLang">
+          <option value="ko">🇰🇷 한국어</option>
+          <option value="en">🇺🇸 영어</option>
+          <option value="ja">🇯🇵 일본어</option>
+          <option value="zh">🇨🇳 중국어</option>
+          <option value="es">🇪🇸 스페인어</option>
+          <option value="fr">🇫🇷 프랑스어</option>
+          <option value="de">🇩🇪 독일어</option>
+        </select>
+      </div>
+    </div>
+    <div class="section" style="margin-bottom:0;">
+      <div class="section-title">번역 대상 언어</div>
+      <div class="field">
+        <select id="tgtLang" onchange="autoSelectVoice(this.value)">
+          <option value="en-US">🇺🇸 영어</option>
+          <option value="ja-JP">🇯🇵 일본어</option>
+          <option value="zh-CN">🇨🇳 중국어 (간체)</option>
+          <option value="es-ES">🇪🇸 스페인어</option>
+          <option value="fr-FR">🇫🇷 프랑스어</option>
+          <option value="de-DE">🇩🇪 독일어</option>
+          <option value="ko-KR">🇰🇷 한국어</option>
+          <option value="ar-SA">🇸🇦 아랍어</option>
+          <option value="pt-BR">🇧🇷 포르투갈어</option>
+          <option value="ru-RU">🇷🇺 러시아어</option>
+          <option value="vi-VN">🇻🇳 베트남어</option>
+          <option value="th-TH">🇹🇭 태국어</option>
+          <option value="it-IT">🇮🇹 이탈리아어</option>
+          <option value="nl-NL">🇳🇱 네덜란드어</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice -->
+  <div class="section" style="margin-bottom:1rem;">
+    <div class="section-title">Azure TTS 음성</div>
+    <div class="field">
+      <select id="azureVoice">
+        <option value="en-US-JennyNeural">영어 — Jenny (여성)</option>
+        <option value="en-US-GuyNeural">영어 — Guy (남성)</option>
+        <option value="en-US-AriaNeural">영어 — Aria (여성)</option>
+        <option value="ja-JP-NanamiNeural">일본어 — Nanami (여성)</option>
+        <option value="ja-JP-KeitaNeural">일본어 — Keita (남성)</option>
+        <option value="zh-CN-XiaoxiaoNeural">중국어 — Xiaoxiao (여성)</option>
+        <option value="zh-CN-YunxiNeural">중국어 — Yunxi (남성)</option>
+        <option value="es-ES-ElviraNeural">스페인어 — Elvira (여성)</option>
+        <option value="fr-FR-DeniseNeural">프랑스어 — Denise (여성)</option>
+        <option value="de-DE-KatjaNeural">독일어 — Katja (여성)</option>
+        <option value="ko-KR-SunHiNeural">한국어 — SunHi (여성)</option>
+        <option value="ko-KR-InJoonNeural">한국어 — InJoon (남성)</option>
+        <option value="ar-SA-ZariyahNeural">아랍어 — Zariyah (여성)</option>
+        <option value="pt-BR-FranciscaNeural">포르투갈어 — Francisca (여성)</option>
+        <option value="ru-RU-SvetlanaNeural">러시아어 — Svetlana (여성)</option>
+        <option value="vi-VN-HoaiMyNeural">베트남어 — HoaiMy (여성)</option>
+        <option value="th-TH-PremwadeeNeural">태국어 — Premwadee (여성)</option>
+        <option value="it-IT-ElsaNeural">이탈리아어 — Elsa (여성)</option>
+        <option value="nl-NL-ColetteNeural">네덜란드어 — Colette (여성)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Main button -->
+  <button class="main-btn start" id="mainBtn" onclick="toggleRecording()">
+    🎤 번역 시작
+  </button>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">API 키를 저장하고 번역 시작을 누르세요</span>
+  </div>
+
+  <!-- Timer -->
+  <div class="timer-wrap" id="timerWrap">
+    <div class="timer-label">
+      <span>녹음 중...</span>
+      <span><span id="timerSec">0</span>초 / 4초</span>
+    </div>
+    <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+  </div>
+
+  <!-- Output -->
+  <div class="output-grid">
+    <div class="output-panel">
+      <div class="panel-label"><div class="dot-sm src"></div> 인식된 텍스트</div>
+      <div class="panel-text empty" id="srcText">말하면 여기에 원문이 표시됩니다</div>
+    </div>
+    <div class="output-panel">
+      <div class="panel-label"><div class="dot-sm tgt"></div> 번역 결과</div>
+      <div class="panel-text empty" id="tgtText">번역된 내용이 여기에 표시됩니다</div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-panel">
+    <div class="history-header">
+      <div class="history-title">번역 기록</div>
+      <button class="clear-btn" onclick="clearHistory()">기록 지우기</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">아직 번역 기록이 없습니다</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+//  Storage keys
+// ─────────────────────────────────────────────
+const SK = {
+  groqKey:     'vt_groq_key',
+  geminiKey:   'vt_gemini_key',
+  azureKey:    'vt_azure_key',
+  azureRegion: 'vt_azure_region',
+  sttEngine:   'vt_stt_engine',
+  srcLang:     'vt_src_lang',
+  tgtLang:     'vt_tgt_lang',
+  azureVoice:  'vt_azure_voice',
+};
+
+// ─────────────────────────────────────────────
+//  Init
+// ─────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Load saved API keys into inputs
+  const loadInput = (id, key) => {
+    const v = localStorage.getItem(key);
+    if (v) document.getElementById(id).value = v;
+  };
+  loadInput('groqKey',     SK.groqKey);
+  loadInput('geminiKey',   SK.geminiKey);
+  loadInput('azureKey',    SK.azureKey);
+  loadInput('azureRegion', SK.azureRegion);
+
+  // Show saved state for keys that exist
+  if (localStorage.getItem(SK.groqKey))   setSavedUI('groq',   true);
+  if (localStorage.getItem(SK.geminiKey)) setSavedUI('gemini', true);
+  if (localStorage.getItem(SK.azureKey))  setSavedUI('azure',  true);
+
+  // Load preferences
+  const loadSelect = (id, key) => {
+    const v = localStorage.getItem(key);
+    if (v) document.getElementById(id).value = v;
+  };
+  loadSelect('srcLang',    SK.srcLang);
+  loadSelect('tgtLang',    SK.tgtLang);
+  loadSelect('azureVoice', SK.azureVoice);
+
+  // Auto-save preferences on change
+  ['srcLang','tgtLang','azureVoice'].forEach(id => {
+    document.getElementById(id).addEventListener('change', function() {
+      localStorage.setItem(SK[id], this.value);
+    });
+  });
+
+  // Restore STT engine
+  const engine = localStorage.getItem(SK.sttEngine) || 'groq';
+  selectSTT(engine, false);
+});
+
+// ─────────────────────────────────────────────
+//  Per-key save (explicit button)
+// ─────────────────────────────────────────────
+function saveKey(name) {
+  if (name === 'groq') {
+    const val = document.getElementById('groqKey').value.trim();
+    if (!val) { showToast('❌ Groq 키를 입력해주세요', true); return; }
+    localStorage.setItem(SK.groqKey, val);
+    setSavedUI('groq', true);
+    showToast('✓ Groq API 키가 저장되었습니다');
+
+  } else if (name === 'gemini') {
+    const val = document.getElementById('geminiKey').value.trim();
+    if (!val) { showToast('❌ Gemini 키를 입력해주세요', true); return; }
+    localStorage.setItem(SK.geminiKey, val);
+    setSavedUI('gemini', true);
+    showToast('✓ Gemini API 키가 저장되었습니다');
+
+  } else if (name === 'azure') {
+    const key    = document.getElementById('azureKey').value.trim();
+    const region = document.getElementById('azureRegion').value.trim();
+    if (!key) { showToast('❌ Azure Speech 키를 입력해주세요', true); return; }
+    localStorage.setItem(SK.azureKey, key);
+    if (region) localStorage.setItem(SK.azureRegion, region);
+    setSavedUI('azure', true);
+    showToast('✓ Azure Speech 키가 저장되었습니다');
+  }
+}
+
+// Reset saved UI when user edits a field
+function markUnsaved(name) {
+  setSavedUI(name, false);
+}
+
+function setSavedUI(name, saved) {
+  // Dot indicator
+  const dot = document.getElementById('dot-' + name);
+  if (dot) dot.classList.toggle('saved', saved);
+
+  // Button text + style
+  const btn = document.getElementById('saveBtn-' + name);
+  if (!btn) return;
+  if (saved) {
+    btn.classList.add('saved-state');
+    btn.textContent = '✓ 저장됨';
+  } else {
+    btn.classList.remove('saved-state');
+    btn.textContent = '💾 저장';
+  }
+}
+
+// ─────────────────────────────────────────────
+//  STT engine toggle
+// ─────────────────────────────────────────────
+let sttEngine = 'groq';
+function selectSTT(engine, save = true) {
+  sttEngine = engine;
+  document.getElementById('tabGroq').classList.toggle('active', engine === 'groq');
+  document.getElementById('tabGemini').classList.toggle('active', engine === 'gemini');
+  if (save) localStorage.setItem(SK.sttEngine, engine);
+}
+
+// ─────────────────────────────────────────────
+//  Voice auto-select by language
+// ─────────────────────────────────────────────
+const VOICE_MAP = {
+  'en-US':'en-US-JennyNeural', 'ja-JP':'ja-JP-NanamiNeural',
+  'zh-CN':'zh-CN-XiaoxiaoNeural', 'es-ES':'es-ES-ElviraNeural',
+  'fr-FR':'fr-FR-DeniseNeural', 'de-DE':'de-DE-KatjaNeural',
+  'ko-KR':'ko-KR-SunHiNeural', 'ar-SA':'ar-SA-ZariyahNeural',
+  'pt-BR':'pt-BR-FranciscaNeural', 'ru-RU':'ru-RU-SvetlanaNeural',
+  'vi-VN':'vi-VN-HoaiMyNeural', 'th-TH':'th-TH-PremwadeeNeural',
+  'it-IT':'it-IT-ElsaNeural', 'nl-NL':'nl-NL-ColetteNeural',
+};
+function autoSelectVoice(lang) {
+  const v = VOICE_MAP[lang];
+  if (v) {
+    document.getElementById('azureVoice').value = v;
+    localStorage.setItem(SK.azureVoice, v);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Recording state
+// ─────────────────────────────────────────────
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let chunkTimeout = null;
+let timerInterval = null;
+let micStream = null;
+let historyItems = [];
+
+function getVal(id) { return document.getElementById(id).value.trim(); }
+
+async function toggleRecording() {
+  if (!isRecording) await startRecording();
+  else stopRecording();
+}
+
+async function startRecording() {
+  const groqKey   = getVal('groqKey');
+  const geminiKey = getVal('geminiKey');
+  const azureKey  = getVal('azureKey');
+
+  if (sttEngine === 'groq'   && !groqKey)   { showToast('❌ Groq 키를 먼저 저장해주세요', true); return; }
+  if (sttEngine === 'gemini' && !geminiKey) { showToast('❌ Gemini 키를 먼저 저장해주세요', true); return; }
+  if (!azureKey) { showToast('❌ Azure 키를 먼저 저장해주세요', true); return; }
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) {
+    showToast('❌ 마이크 권한이 필요합니다', true);
+    return;
+  }
+
+  isRecording = true;
+  const btn = document.getElementById('mainBtn');
+  btn.className = 'main-btn stop';
+  btn.textContent = '⏹ 번역 중지';
+  document.getElementById('timerWrap').style.display = 'block';
+  setStatus('listening', '🎤 듣는 중...');
+  startChunk();
+}
+
+function stopRecording() {
+  isRecording = false;
+  clearTimeout(chunkTimeout);
+  clearInterval(timerInterval);
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  const btn = document.getElementById('mainBtn');
+  btn.className = 'main-btn start';
+  btn.textContent = '🎤 번역 시작';
+  document.getElementById('timerWrap').style.display = 'none';
+  document.getElementById('timerFill').style.width = '0%';
+  setStatus('', '중지됨');
+}
+
+function startChunk() {
+  if (!isRecording) return;
+  audioChunks = [];
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus' : 'audio/webm';
+  mediaRecorder = new MediaRecorder(micStream, { mimeType: mime });
+  mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+  mediaRecorder.onstop = () => processChunk([...audioChunks]);
+  mediaRecorder.start(100);
+
+  let elapsed = 0;
+  clearInterval(timerInterval);
+  document.getElementById('timerFill').style.width = '0%';
+  document.getElementById('timerSec').textContent = '0';
+  timerInterval = setInterval(() => {
+    elapsed = Math.min(elapsed + 0.1, 4);
+    document.getElementById('timerSec').textContent = Math.floor(elapsed);
+    document.getElementById('timerFill').style.width = (elapsed / 4 * 100) + '%';
+  }, 100);
+
+  chunkTimeout = setTimeout(() => {
+    clearInterval(timerInterval);
+    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    setTimeout(() => { if (isRecording) startChunk(); }, 300);
+  }, 4000);
+}
+
+// ─────────────────────────────────────────────
+//  Process audio chunk pipeline
+// ─────────────────────────────────────────────
+async function processChunk(chunks) {
+  if (!chunks.length) return;
+  const blob = new Blob(chunks, { type: 'audio/webm' });
+  if (blob.size < 3000) return; // skip near-silence
+
+  setStatus('processing', '⚙️ 음성 인식 중...');
+  let transcript = '';
+  try {
+    transcript = sttEngine === 'groq' ? await sttGroq(blob) : await sttGemini(blob);
+  } catch(e) {
+    setStatus('listening', '❌ STT 오류: ' + e.message.slice(0, 50));
+    return;
+  }
+
+  transcript = transcript.trim();
+  if (!transcript) { setStatus('listening', '🎤 듣는 중...'); return; }
+
+  document.getElementById('srcText').textContent = transcript;
+  document.getElementById('srcText').classList.remove('empty');
+
+  setStatus('processing', '🌐 번역 중...');
+  let translated = '';
+  try {
+    translated = await translateText(transcript);
+  } catch(e) {
+    setStatus('listening', '❌ 번역 오류: ' + e.message.slice(0, 50));
+    return;
+  }
+
+  translated = translated.trim();
+  document.getElementById('tgtText').textContent = translated;
+  document.getElementById('tgtText').classList.remove('empty');
+  addHistory(transcript, translated);
+
+  setStatus('speaking', '🔊 음성 출력 중...');
+  try { await azureTTS(translated); } catch(e) { console.warn('TTS:', e); }
+  setStatus('listening', '🎤 듣는 중...');
+}
+
+// ─────────────────────────────────────────────
+//  STT: Groq Whisper
+// ─────────────────────────────────────────────
+async function sttGroq(blob) {
+  const form = new FormData();
+  form.append('file', blob, 'audio.webm');
+  form.append('model', 'whisper-large-v3');
+  form.append('language', getVal('srcLang'));
+  form.append('response_format', 'text');
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + getVal('groqKey') },
+    body: form
+  });
+  if (!res.ok) throw new Error('Groq ' + res.status + ': ' + (await res.text()).slice(0, 60));
+  return await res.text();
+}
+
+// ─────────────────────────────────────────────
+//  STT: Gemini
+// ─────────────────────────────────────────────
+async function sttGemini(blob) {
+  const b64 = await blobToBase64(blob);
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${getVal('geminiKey')}`,
+    {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [
+        { inline_data: { mime_type: 'audio/webm', data: b64 } },
+        { text: '이 오디오를 정확히 텍스트로 변환해주세요. 텍스트만 출력하고 다른 말은 하지 마세요.' }
+      ]}]})
+    }
+  );
+  if (!res.ok) throw new Error('Gemini STT ' + res.status);
+  const d = await res.json();
+  return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// ─────────────────────────────────────────────
+//  Translation
+// ─────────────────────────────────────────────
+async function translateText(text) {
+  const tgtEl   = document.getElementById('tgtLang');
+  const langName = tgtEl.selectedOptions[0].text
+    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '').trim().split('—')[0].trim();
+
+  if (sttEngine === 'groq') {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + getVal('groqKey'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3-70b-8192',
+        messages: [
+          { role: 'system', content: `You are a professional translator. Translate to ${langName}. Output only the translation.` },
+          { role: 'user',   content: text }
+        ],
+        max_tokens: 500
+      })
+    });
+    if (!res.ok) throw new Error('Groq 번역 ' + res.status);
+    const d = await res.json();
+    return d.choices[0].message.content;
+  } else {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${getVal('geminiKey')}`,
+      {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{
+          text: `Translate to ${langName}. Output only the translation:\n\n${text}`
+        }]}]})
+      }
+    );
+    if (!res.ok) throw new Error('Gemini 번역 ' + res.status);
+    const d = await res.json();
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Azure TTS
+// ─────────────────────────────────────────────
+async function azureTTS(text) {
+  const region = getVal('azureRegion') || 'koreacentral';
+  const voice  = getVal('azureVoice');
+  const lang   = voice.split('-').slice(0, 2).join('-');
+  const safe   = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ssml   = `<speak version='1.0' xml:lang='${lang}'><voice name='${voice}'>${safe}</voice></speak>`;
+
+  const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    method: 'POST',
+    headers: {
+      'Ocp-Apim-Subscription-Key': getVal('azureKey'),
+      'Content-Type': 'application/ssml+xml',
+      'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3'
+    },
+    body: ssml
+  });
+  if (!res.ok) throw new Error('Azure TTS ' + res.status);
+  const audio = new Audio(URL.createObjectURL(await res.blob()));
+  audio.play();
+  return new Promise(r => { audio.onended = r; audio.onerror = r; });
+}
+
+// ─────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+function setStatus(state, text) {
+  document.getElementById('statusDot').className = 'dot' + (state ? ' ' + state : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+let toastTimer;
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = isError ? 'rgba(240,82,82,0.35)' : 'rgba(62,207,142,0.25)';
+  t.style.color = isError ? 'var(--red)' : 'var(--green)';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─────────────────────────────────────────────
+//  History
+// ─────────────────────────────────────────────
+function addHistory(src, tgt) {
+  const now = new Date().toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  historyItems.unshift({ src, tgt, ts: now });
+  if (historyItems.length > 30) historyItems.pop();
+  renderHistory();
+}
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (!historyItems.length) {
+    list.innerHTML = '<div class="history-empty">아직 번역 기록이 없습니다</div>';
+    return;
+  }
+  list.innerHTML = historyItems.map(h => `
+    <div class="history-item">
+      <div class="history-ts">${h.ts}</div>
+      <div class="history-src">${esc(h.src)}</div>
+      <div class="history-tgt">${esc(h.tgt)}</div>
+    </div>`).join('');
+}
+function clearHistory() { historyItems = []; renderHistory(); }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
